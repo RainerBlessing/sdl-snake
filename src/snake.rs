@@ -1,26 +1,17 @@
-extern crate sdl2;
 extern crate rand;
-
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
 
 use rand::Rng;
 
 use crate::constants::PlayField;
 use crate::constants::Type;
 use crate::constants::GameState;
+use crate::constants::Keyboard;
+use crate::events::SnakeEvent;
 
 const WIDTH: u32 = 800;
-
+const M: usize = 40;
+const N: usize = 40;
 const SNAKE_WIDTH: u32 = WIDTH / 40;
-
-/**
- * variablen in struct vereinen
- * Snake Impl.
- * Canvas trait
- * SDL Canvas
- * "JS" Canvas
- **/
 
 pub struct Snake {
     rng: rand::rngs::ThreadRng,
@@ -31,6 +22,7 @@ pub struct Snake {
     pub score: i32,
     snake_vec: Vec<PlayField>,
     apple_vec: Vec<PlayField>,
+    grid: [[PlayField; 40]; 40],
 }
 
 impl Snake {
@@ -44,9 +36,20 @@ impl Snake {
             apple_vec: Vec::new(),
             wrap: false,
             rng: rand::thread_rng(),
+            grid: [[PlayField { field_type: Type::Empty, x: 0, y: 0 }; N]; M],
         }
     }
     pub fn setup_board(&mut self) -> () {
+        for i in 0..M {
+            for j in 0..N {
+                let k: u32 = i as u32;
+                let l: u32 = j as u32;
+
+                self.grid[i][j].x = SNAKE_WIDTH * k;
+                self.grid[i][j].y = SNAKE_WIDTH * l;
+            }
+        }
+
         self.score = 0;
         self.velocity_x = 0;
         self.velocity_y = 0;
@@ -144,38 +147,52 @@ impl Snake {
         return self.game_state;
     }
 
-    pub fn draw_elements(&self, mut grid:[[PlayField; 40]; 40]) -> [[PlayField; 40]; 40]{
+    pub fn draw_elements(&mut self,) -> [[PlayField; 40]; 40] {
+        self.setup_grid();
+
         for snake_elem in self.snake_vec.clone() {
-            println!("x1 {} y1 {} wrap {} vx {} vy {}", snake_elem.x,snake_elem.y,self.wrap,self.velocity_x,self.velocity_y);
-            grid[snake_elem.x as usize][snake_elem.y as usize].field_type = snake_elem.field_type;
+            println!("x1 {} y1 {} wrap {} vx {} vy {}", snake_elem.x, snake_elem.y, self.wrap, self.velocity_x, self.velocity_y);
+            self.grid[snake_elem.x as usize][snake_elem.y as usize].field_type = snake_elem.field_type;
         }
 
         for apple_elem in self.apple_vec.clone() {
-            grid[apple_elem.x as usize][apple_elem.y as usize].field_type = apple_elem.field_type;
+            self.grid[apple_elem.x as usize][apple_elem.y as usize].field_type = apple_elem.field_type;
         }
 
-        grid
+        self.grid
     }
 
-    pub fn parse_event(&mut self,event: sdl2::event::Event) -> (){
-        match event{
-            Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
+    pub fn parse_event(&mut self, snake_event: SnakeEvent) -> () {
+        let key = snake_event.get_key();
+        match key {
+            Keyboard::Up => {
                 self.velocity_y = -1;
                 self.velocity_x = 0;
             }
-            Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
+            Keyboard::Down => {
                 self.velocity_y = 1;
                 self.velocity_x = 0;
             }
-            Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
+            Keyboard::Left => {
                 self.velocity_y = 0;
                 self.velocity_x = -1;
             }
-            Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
+            Keyboard::Right => {
                 self.velocity_y = 0;
                 self.velocity_x = 1;
             }
             _ => {}
+        }
+    }
+    fn setup_grid(&mut self) {
+        for i in 0..M {
+            for j in 0..N {
+                if i == 0 || i == 39 || j == 0 || j == 39 {
+                    self.grid[i][j].field_type = Type::Wall;
+                } else {
+                    self.grid[i][j].field_type = Type::Empty;
+                }
+            }
         }
     }
 }

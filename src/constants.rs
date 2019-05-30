@@ -18,3 +18,14 @@ pub enum GameState {
     Play,
     GameOver,
 }
+
+#[derive(Copy, Clone)]
+pub enum Keyboard {
+    Up,
+    Down,
+    Left,
+    Right,
+//    Space,
+//    Esc,
+    Unknown,
+}

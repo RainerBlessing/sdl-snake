@@ -1,5 +1,6 @@
 extern crate sdl2;
-extern crate rand;
+mod constants;
+mod snake;
 
 use sdl2::pixels::Color;
 use sdl2::event::Event;
@@ -9,35 +10,18 @@ use sdl2::TimerSubsystem;
 use std::time::Duration;
 use sdl2::rect::Rect;
 
-use rand::Rng;
 use std::path::Path;
 use sdl2::render::TextureQuery;
+
+use crate::constants::PlayField;
+use crate::constants::Type;
+use crate::constants::GameState;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 800;
 
 const SNAKE_WIDTH: u32 = WIDTH / 40;
 
-#[derive(Copy, Clone)]
-enum Type {
-    Empty,
-    Wall,
-    Snake,
-    Apple,
-}
-
-#[derive(Copy, Clone)]
-struct PlayField {
-    field_type: Type,
-    x: u32,
-    y: u32,
-}
-
-#[derive(Copy, Clone)]
-enum GameState {
-    Play,
-    GameOver
-}
 
 // handle the annoying Rect i32
 macro_rules! rect (
@@ -97,25 +81,12 @@ pub fn main() {
     let frame_delay = 1000 / 60;
     let mut timer = sdl_context.timer().unwrap();
 
-    let mut rng = rand::thread_rng();
-
-    let mut wrap: bool = false;
-
-    let mut velocity_x: i32 = 0;
-    let mut velocity_y: i32 = 0;
-
 
     const M: usize = 40;
     const N: usize = 40;
 
-    let mut score: i32 = 0;
-    let mut game_state=GameState::Play;
+    let mut game_state = GameState::Play;
 
-    let mut snake_vec = Vec::new();
-    snake_vec.push(PlayField { x: 20, y: 20, field_type: Type::Snake });
-
-    let mut apple_vec = Vec::new();
-    apple_vec.push(PlayField { x: 5, y: 5, field_type: Type::Apple });
 
     let mut grid = [[PlayField { field_type: Type::Empty, x: 0, y: 0 }; N]; M];
 
@@ -128,9 +99,10 @@ pub fn main() {
             grid[i][j].y = SNAKE_WIDTH * l;
         }
     }
-    add_snake_segment(&mut velocity_x, &mut velocity_y, &mut snake_vec);
-    add_snake_segment(&mut velocity_x, &mut velocity_y, &mut snake_vec);
-    add_snake_segment(&mut velocity_x, &mut velocity_y, &mut snake_vec);
+
+    let mut snake = snake::Snake::new();
+
+    snake.setup_board();
 
     'running: loop {
         let ticks = timer.ticks() as i32;
@@ -145,19 +117,12 @@ pub fn main() {
             }
         }
 
-//        println!("-------------------");
-        for snake_elem in &snake_vec {
-//            println!("x1 {} y1 {} wrap {} vx {} vy {}", snake_elem.x,snake_elem.y,wrap,velocity_x,velocity_y);
-            grid[snake_elem.x as usize][snake_elem.y as usize].field_type = snake_elem.field_type;
-        }
 
-        for apple_elem in &apple_vec {
-            grid[apple_elem.x as usize][apple_elem.y as usize].field_type = apple_elem.field_type;
-        }
 
-//        println!("-------------------");
         canvas.set_draw_color(Color::RGB(0, 0, 0));
         canvas.clear();
+
+        grid=snake.draw_elements(grid);
 
         for i in 0..M {
             for j in 0..N {
@@ -172,7 +137,6 @@ pub fn main() {
                     Type::Snake => {
                         canvas.set_draw_color(Color::RGB(0, 255, 0));
                     }
-
                     Type::Apple => {
                         canvas.set_draw_color(Color::RGB(255, 0, 0));
                     }
@@ -183,7 +147,6 @@ pub fn main() {
         }
 
         for event in event_pump.poll_iter() {
-
             match game_state {
                 GameState::Play => {
                     match event {
@@ -191,23 +154,11 @@ pub fn main() {
                         Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                             break 'running;
                         }
-                        Event::KeyDown { keycode: Some(Keycode::Up), .. } => {
-                            velocity_y = -1;
-                            velocity_x = 0;
+
+
+                        _ => {
+                            snake.parse_event(event);
                         }
-                        Event::KeyDown { keycode: Some(Keycode::Down), .. } => {
-                            velocity_y = 1;
-                            velocity_x = 0;
-                        }
-                        Event::KeyDown { keycode: Some(Keycode::Left), .. } => {
-                            velocity_y = 0;
-                            velocity_x = -1;
-                        }
-                        Event::KeyDown { keycode: Some(Keycode::Right), .. } => {
-                            velocity_y = 0;
-                            velocity_x = 1;
-                        }
-                        _ => {}
                     }
                 }
                 GameState::GameOver => {
@@ -217,13 +168,7 @@ pub fn main() {
                             break 'running;
                         }
                         Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
-                            score=0;
-                            velocity_x=0;
-                            velocity_y=0;
-                            snake_vec = Vec::new();
-                            snake_vec.push(PlayField { x: 20, y: 20, field_type: Type::Snake });
-                            apple_vec = Vec::new();
-                            apple_vec.push(PlayField { x: 5, y: 5, field_type: Type::Apple });
+                            snake.setup_board();
                             game_state = GameState::Play;
                         }
                         _ => {}
@@ -234,42 +179,13 @@ pub fn main() {
 
         match game_state {
             GameState::Play => {
-                move_snake_parts(velocity_x, velocity_y, &mut snake_vec);
+                game_state = snake.play_state();
             }
             _ => {}
         }
 
-
-        match game_state {
-            GameState::Play => {
-                let mut snake_elem = snake_vec[0];
-
-                snake_elem.x = move_snake(&mut velocity_x, snake_elem.x as usize, &mut wrap) as u32;
-                snake_elem.y = move_snake(&mut velocity_y, snake_elem.y as usize, &mut wrap) as u32;
-                snake_vec[0] = snake_elem;
-
-                if snake_vec[0].x == apple_vec[0].x && snake_vec[0].y == apple_vec[0].y {
-                    apple_vec[0].x = rng.gen_range(1, SNAKE_WIDTH);
-                    apple_vec[0].y = rng.gen_range(1, SNAKE_WIDTH);
-                    score = score + 1;
-
-                    add_snake_segment(&mut velocity_x, &mut velocity_y, &mut snake_vec)
-                }
-
-                for pos in (1..snake_vec.len()).rev() {
-                    if snake_vec[0].x == snake_vec[pos].x && snake_vec[0].y == snake_vec[pos].y {
-                        game_state = GameState::GameOver;
-                    }
-                }
-            }
-            _ => {}
-        }
-
-
-//        println!("-------------------");
-
-        // render a surface, and convert it to a texture bound to the canvas
-        let surface = font.render(score.to_string().as_str())
+//         render a surface, and convert it to a texture bound to the canvas
+        let surface = font.render(snake.score.to_string().as_str())
             .blended(Color::RGBA(255, 0, 0, 255)).unwrap();
         let texture = texture_creator.create_texture_from_surface(&surface).unwrap();
 
@@ -287,36 +203,6 @@ pub fn main() {
     }
 }
 
-fn add_snake_segment(velocity_x: &mut i32, velocity_y: &mut i32, snake_vec: &mut Vec<PlayField>) -> () {
-    match velocity_x {
-        1 => {
-            &snake_vec.push(PlayField { x: snake_vec.last().unwrap().x - 1, y: snake_vec.last().unwrap().y, field_type: Type::Snake });
-        }
-        -1 => {
-            &snake_vec.push(PlayField { x: snake_vec.last().unwrap().x + 1, y: snake_vec.last().unwrap().y, field_type: Type::Snake });
-        }
-        _ => {}
-    }
-    match velocity_y {
-        1 => {
-            &snake_vec.push(PlayField { y: snake_vec.last().unwrap().x - 1, x: snake_vec.last().unwrap().y, field_type: Type::Snake });
-        }
-        -1 => {
-            &snake_vec.push(PlayField { y: snake_vec.last().unwrap().x + 1, x: snake_vec.last().unwrap().y, field_type: Type::Snake });
-        }
-        _ => {}
-    }
-}
-
-fn move_snake_parts(velocity_x: i32, velocity_y: i32, snake_vec: &mut Vec<PlayField>) -> () {
-    if velocity_x != 0 || velocity_y != 0 {
-        for pos in (1..snake_vec.len()).rev() {
-            snake_vec[pos].x = snake_vec[pos - 1].x;
-            snake_vec[pos].y = snake_vec[pos - 1].y;
-        }
-    }
-}
-
 
 fn loop_delay(frame_delay: i32, timer: &mut TimerSubsystem, ticks: i32) -> () {
     let frame_time = timer.ticks() as i32;
@@ -328,24 +214,3 @@ fn loop_delay(frame_delay: i32, timer: &mut TimerSubsystem, ticks: i32) -> () {
     }
 }
 
-fn move_snake(velocity: &mut i32, coordinate: usize, wrap: &mut bool) -> usize {
-    let mut coordinate_new: usize = coordinate;
-    if !*wrap && coordinate == 1 && *velocity == -1 as i32
-    {
-        coordinate_new = 38;
-        *wrap = true;
-    } else if !*wrap && coordinate == 38 && *velocity == 1 as i32 {
-        coordinate_new = 1;
-        *wrap = true;
-    } else {
-        if *velocity != 0 {
-            if *velocity == 1 {
-                coordinate_new = coordinate + 1;
-            } else if *velocity == -1 {
-                coordinate_new = coordinate - 1;
-            }
-            *wrap = false;
-        }
-    }
-    return coordinate_new;
-}

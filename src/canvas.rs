@@ -8,15 +8,23 @@ use sdl2::render::TextureQuery;
 
 use crate::constants::Type;
 use crate::constants::PlayField;
-use sdl2::ttf::Sdl2TtfContext;
+use sdl2::{ttf};
+use crate::constants::Keyboard;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 
-pub struct SdlCanvas<'a> {
-    font: sdl2::ttf::Font<'a, 'a>,
+use crate::constants::GameState;
+use crate::events::SnakeEvent;
+use crate::snake::Snake;
+
+pub struct SdlCanvas<'a, 'b> {
+    font: sdl2::ttf::Font<'a, 'b>,
     canvas: sdl2::render::Canvas<sdl2::video::Window>,
     texture_creator: sdl2::render::TextureCreator<sdl2::video::WindowContext>,
     timer: sdl2::TimerSubsystem,
     frame_delay: i32,
-    ticks: i32
+    ticks: i32,
+    sdl_context: sdl2::Sdl,
 }
 
 const WIDTH: u32 = 800;
@@ -31,9 +39,14 @@ macro_rules! rect (
     )
 );
 
-impl<'a> SdlCanvas<'a> {
-    //    pub fn new() -> SdlCanvas<'a> {
-    pub fn new(ttf_context: &'a Sdl2TtfContext, sdl_context: &sdl2::Sdl) -> SdlCanvas<'a> {
+trait Canvas {}
+
+impl<'a, 'b> Canvas for SdlCanvas<'a, 'b> {}
+
+
+impl<'a, 'b> SdlCanvas<'a, 'b> {
+    pub fn new(ttf_context: &'a ttf::Sdl2TtfContext) -> SdlCanvas<'a, 'b> {
+        let sdl_context = sdl2::init().unwrap();
 
         let video_subsystem = sdl_context.video().unwrap();
         let window = video_subsystem.window("SDL2 Snake", WIDTH, HEIGHT)
@@ -51,13 +64,15 @@ impl<'a> SdlCanvas<'a> {
         let timer = sdl_context.timer().unwrap();
 
         let texture_creator = canvas.texture_creator();
-        SdlCanvas  {
+
+        SdlCanvas {
             font,
             canvas,
             texture_creator,
             timer,
             frame_delay: 1000 / 60,
-            ticks: 0
+            ticks: 0,
+            sdl_context,
         }
     }
 
@@ -85,7 +100,7 @@ impl<'a> SdlCanvas<'a> {
         rect!(cx, cy, w, h)
     }
 
-    pub fn create_score_text(&mut self,  text: &str) -> () {
+    pub fn create_score_text(&mut self, text: &str) -> () {
 //             render a surface, and convert it to a texture bound to the canvas
         let surface = self.font.render(text)
             .blended(Color::RGBA(255, 0, 0, 255)).unwrap();
@@ -99,7 +114,7 @@ impl<'a> SdlCanvas<'a> {
         self.canvas.copy(&texture, None, Some(target)).unwrap();
     }
 
-    pub fn start_loop(&mut self) -> (){
+    pub fn start_loop(&mut self) -> () {
         self.ticks = self.timer.ticks() as i32;
     }
 
@@ -119,16 +134,16 @@ impl<'a> SdlCanvas<'a> {
                 let rect: Rect = Rect::new(grid[i][j].x as i32, grid[i][j].y as i32, SNAKE_WIDTH, SNAKE_WIDTH);
                 match grid[i][j].field_type {
                     Type::Empty => {
-                        self.canvas.set_draw_color(Color::RGB(0, 0, 0));
+                        self.color_black();
                     }
                     Type::Wall => {
-                        self.canvas.set_draw_color(Color::RGB(255, 255, 255));
+                        self.color_white();
                     }
                     Type::Snake => {
-                        self.canvas.set_draw_color(Color::RGB(0, 255, 0));
+                        self.color_green();
                     }
                     Type::Apple => {
-                        self.canvas.set_draw_color(Color::RGB(255, 0, 0));
+                        self.color_red();
                     }
                 }
 
@@ -137,12 +152,101 @@ impl<'a> SdlCanvas<'a> {
         }
     }
 
-    pub fn clear(&mut self) -> (){
+    fn color_red(&mut self) {
+        self.canvas.set_draw_color(Color::RGB(255, 0, 0));
+    }
+
+    fn color_green(&mut self) {
+        self.canvas.set_draw_color(Color::RGB(0, 255, 0));
+    }
+
+    fn color_white(&mut self) {
+        self.canvas.set_draw_color(Color::RGB(255, 255, 255));
+    }
+
+    fn color_black(&mut self) {
         self.canvas.set_draw_color(Color::RGB(0, 0, 0));
+    }
+
+    pub fn clear(&mut self) -> () {
+        self.color_black();
         self.canvas.clear();
     }
 
     pub fn present(&mut self) -> () {
         self.canvas.present();
+    }
+
+
+    fn parse_event(&self, snake: &mut Snake, snake_event: SnakeEvent) -> () {
+        let key = snake_event.get_key();
+        match key {
+            Keyboard::Up => snake.move_up(),
+            Keyboard::Down => snake.move_down(),
+            Keyboard::Left => snake.move_left(),
+            Keyboard::Right => snake.move_right(),
+            _ => {}
+        }
+    }
+
+    pub fn start(&mut self, mut snake: &mut Snake) -> () {
+        let mut game_state = GameState::Play;
+
+        snake.setup_board();
+
+        let mut event_pump = self.sdl_context.event_pump().unwrap();
+
+        'running: loop {
+            self.start_loop();
+
+            self.clear();
+
+            let grid = snake.draw_elements();
+
+            self.draw(grid);
+
+            for sdl_event in event_pump.poll_iter() {
+                match game_state {
+                    GameState::Play => {
+                        match sdl_event {
+                            Event::Quit { .. } |
+                            Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                                break 'running;
+                            }
+
+                            _ => {
+                                self.parse_event(&mut snake, SnakeEvent::new(sdl_event));
+                            }
+                        }
+                    }
+                    GameState::GameOver => {
+                        match sdl_event {
+                            Event::Quit { .. } |
+                            Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                                break 'running;
+                            }
+                            Event::KeyDown { keycode: Some(Keycode::Space), .. } => {
+                                snake.setup_board();
+                                game_state = GameState::Play;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            match game_state {
+                GameState::Play => {
+                    game_state = snake.play_state();
+                }
+                _ => {}
+            }
+
+            self.create_score_text(snake.score.to_string().as_str());
+
+            self.present();
+
+            self.loop_delay()
+        }
     }
 }

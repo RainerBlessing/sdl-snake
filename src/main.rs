@@ -11,6 +11,19 @@ use sdl2::keyboard::Keycode;
 use crate::constants::GameState;
 use crate::events::SnakeEvent;
 
+use crate::constants::Keyboard;
+
+fn parse_event(snake: &mut snake::Snake, snake_event: SnakeEvent) -> () {
+    let key = snake_event.get_key();
+    match key {
+        Keyboard::Up => snake.move_up(),
+        Keyboard::Down => snake.move_down(),
+        Keyboard::Left => snake.move_left(),
+        Keyboard::Right => snake.move_right(),
+        _ => {}
+    }
+}
+
 pub fn main() {
 
     let sdl_context = sdl2::init().unwrap();
@@ -48,7 +61,7 @@ pub fn main() {
                         }
 
                         _ => {
-                            snake.parse_event(SnakeEvent::new(sdl_event));
+                            parse_event(&mut snake,SnakeEvent::new(sdl_event));
                         }
                     }
                 }

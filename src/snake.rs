@@ -5,8 +5,6 @@ use rand::Rng;
 use crate::constants::PlayField;
 use crate::constants::Type;
 use crate::constants::GameState;
-use crate::constants::Keyboard;
-use crate::events::SnakeEvent;
 
 const WIDTH: u32 = 800;
 const M: usize = 40;
@@ -162,27 +160,24 @@ impl Snake {
         self.grid
     }
 
-    pub fn parse_event(&mut self, snake_event: SnakeEvent) -> () {
-        let key = snake_event.get_key();
-        match key {
-            Keyboard::Up => {
-                self.velocity_y = -1;
-                self.velocity_x = 0;
-            }
-            Keyboard::Down => {
-                self.velocity_y = 1;
-                self.velocity_x = 0;
-            }
-            Keyboard::Left => {
-                self.velocity_y = 0;
-                self.velocity_x = -1;
-            }
-            Keyboard::Right => {
-                self.velocity_y = 0;
-                self.velocity_x = 1;
-            }
-            _ => {}
-        }
+    pub fn move_right(&mut self) -> () {
+        self.velocity_y = 0;
+        self.velocity_x = 1;
+    }
+
+    pub fn move_left(&mut self) -> () {
+        self.velocity_y = 0;
+        self.velocity_x = -1;
+    }
+
+    pub fn move_down(&mut self) -> () {
+        self.velocity_y = 1;
+        self.velocity_x = 0;
+    }
+
+    pub fn move_up(&mut self) -> () {
+        self.velocity_y = -1;
+        self.velocity_x = 0;
     }
     fn setup_grid(&mut self) {
         for i in 0..M {
